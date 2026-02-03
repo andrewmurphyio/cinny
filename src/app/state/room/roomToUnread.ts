@@ -4,6 +4,7 @@ import {
   IRoomTimelineData,
   MatrixClient,
   MatrixEvent,
+  NotificationCountType,
   Room,
   RoomEvent,
   SyncState,
@@ -204,7 +205,10 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       data: IRoomTimelineData
     ) => {
       if (!room || !data.liveEvent || room.isSpaceRoom() || !isNotificationEvent(mEvent)) return;
-      if (getNotificationType(mx, room.roomId) === NotificationType.Mute) {
+
+      const notificationType = getNotificationType(mx, room.roomId);
+
+      if (notificationType === NotificationType.Mute) {
         setUnreadAtom({
           type: 'DELETE',
           roomId: room.roomId,
@@ -213,6 +217,21 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       }
 
       if (mEvent.getSender() === mx.getUserId()) return;
+
+      // For MentionsAndKeywords, only show badge for highlights (mentions)
+      if (notificationType === NotificationType.MentionsAndKeywords) {
+        const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
+        if (highlight > 0) {
+          setUnreadAtom({
+            type: 'PUT',
+            unreadInfo: { roomId: room.roomId, highlight, total: highlight },
+          });
+        } else {
+          setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+        }
+        return;
+      }
+
       setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
     };
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
