@@ -246,7 +246,17 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
   const unreadInfos = mx.getRooms().reduce<UnreadInfo[]>((unread, room) => {
     if (room.isSpaceRoom()) return unread;
     if (room.getMyMembership() !== 'join') return unread;
-    if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return unread;
+    const notificationType = getNotificationType(mx, room.roomId);
+    if (notificationType === NotificationType.Mute) return unread;
+
+    // For MentionsAndKeywords rooms, only show badge for highlights (mentions)
+    if (notificationType === NotificationType.MentionsAndKeywords) {
+      const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
+      if (highlight > 0) {
+        unread.push({ roomId: room.roomId, highlight, total: highlight });
+      }
+      return unread;
+    }
 
     if (roomHaveNotification(room) || roomHaveUnread(mx, room)) {
       unread.push(getUnreadInfo(room));
