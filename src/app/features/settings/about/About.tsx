@@ -47,6 +47,8 @@ export function About({ requestClose }: AboutProps) {
                     <Box gap="100" alignItems="End">
                       <Text size="H3">Cinny</Text>
                       <Text size="T200">v4.10.5</Text>
+
+                      <Text size="T200" style={{ color: "#22c55e", fontWeight: 600 }}>(andrew-dev)</Text>
                     </Box>
                     <Text>Yet another matrix client.</Text>
                   </Box>
