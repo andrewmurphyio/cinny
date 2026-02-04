@@ -5,6 +5,15 @@ export type HashRouterConfig = {
   basename?: string;
 };
 
+export type PushConfig = {
+  /** VAPID public key (Application Server Key) */
+  vapidPublicKey?: string;
+  /** Sygnal push gateway URL */
+  pushGatewayUrl?: string;
+  /** App ID matching sygnal.yaml config */
+  appId?: string;
+};
+
 export type ClientConfig = {
   defaultHomeserver?: number;
   homeserverList?: string[];
@@ -18,6 +27,9 @@ export type ClientConfig = {
   };
 
   hashRouter?: HashRouterConfig;
+
+  /** Push notification configuration */
+  push?: PushConfig;
 };
 
 const ClientConfigContext = createContext<ClientConfig | null>(null);
