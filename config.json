@@ -8,7 +8,6 @@
     "xmr.se"
   ],
   "allowCustomHomeservers": true,
-
   "featuredCommunities": {
     "openAsDefault": false,
     "spaces": [
@@ -29,9 +28,13 @@
     ],
     "servers": [ "matrix.org", "mozilla.org", "unredacted.org" ]
   },
-
   "hashRouter": {
     "enabled": true,
     "basename": "/"
+  },
+  "push": {
+    "vapidPublicKey": "BNGV0EdwiW4svERw8M4uyt2mmSleCT_cDS4Z6G3gc-aURAsczdW358oZhWTgVcBG2OYzH35WkRlt0oPwiGseoTA",
+    "pushGatewayUrl": "https://sygnal.andrewmurphy.io/_matrix/push/v1/notify",
+    "appId": "io.andrewmurphy.cinny"
   }
 }
