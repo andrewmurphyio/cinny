@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text, IconButton, Icon, Icons, Scroll } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SystemNotification } from './SystemNotification';
+import { PushNotifications } from './PushNotifications';
 import { AllMessagesNotifications } from './AllMessages';
 import { SpecialMessagesNotifications } from './SpecialMessages';
 import { KeywordMessagesNotifications } from './KeywordMessages';
@@ -34,6 +35,7 @@ export function Notifications({ requestClose }: NotificationsProps) {
           <PageContent>
             <Box direction="Column" gap="700">
               <SystemNotification />
+              <PushNotifications />
               <AllMessagesNotifications />
               <SpecialMessagesNotifications />
               <KeywordMessagesNotifications />
