@@ -93,6 +93,7 @@ import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
+import { useSpaceMute } from '../../../hooks/useSpaceMute';
 
 type SpaceMenuProps = {
   room: Room;
@@ -403,6 +404,8 @@ function SpaceTab({
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const targetRef = useRef<HTMLDivElement>(null);
+  const { isSpaceMuted } = useSpaceMute();
+  const isMuted = isSpaceMuted(space.roomId);
 
   const spaceDraggable: SidebarDraggable = useMemo(
     () =>
@@ -441,8 +444,9 @@ function SpaceTab({
           data-drop-above={dropType === 'reorder-above'}
           data-drop-below={dropType === 'reorder-below'}
           data-inside-folder={!!folder}
+          style={isMuted ? { opacity: 0.5 } : undefined}
         >
-          <SidebarItemTooltip tooltip={disabled ? undefined : space.name}>
+          <SidebarItemTooltip tooltip={disabled ? undefined : isMuted ? `${space.name} (muted)` : space.name}>
             {(triggerRef) => (
               <SidebarAvatar
                 as="button"
