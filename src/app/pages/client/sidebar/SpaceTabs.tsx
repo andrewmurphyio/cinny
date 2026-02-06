@@ -404,8 +404,6 @@ function SpaceTab({
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const targetRef = useRef<HTMLDivElement>(null);
-  const { isSpaceMuted } = useSpaceMute();
-  const isMuted = isSpaceMuted(space.roomId);
 
   const spaceDraggable: SidebarDraggable = useMemo(
     () =>
@@ -444,9 +442,8 @@ function SpaceTab({
           data-drop-above={dropType === 'reorder-above'}
           data-drop-below={dropType === 'reorder-below'}
           data-inside-folder={!!folder}
-          style={isMuted ? { opacity: 0.5 } : undefined}
         >
-          <SidebarItemTooltip tooltip={disabled ? undefined : isMuted ? `${space.name} (muted)` : space.name}>
+          <SidebarItemTooltip tooltip={disabled ? undefined : space.name}>
             {(triggerRef) => (
               <SidebarAvatar
                 as="button"
@@ -609,6 +606,84 @@ function ClosedSpaceFolder({
   );
 }
 
+// Muted Spaces Section
+const MUTED_SECTION_ID = '__muted_spaces__';
+
+type MutedSpacesSectionProps = {
+  mutedSpaceIds: string[];
+  isOpen: boolean;
+  onToggle: () => void;
+  selectedSpaceId?: string;
+  onSpaceClick: MouseEventHandler<HTMLButtonElement>;
+};
+function MutedSpacesSection({
+  mutedSpaceIds,
+  isOpen,
+  onToggle,
+  selectedSpaceId,
+  onSpaceClick,
+}: MutedSpacesSectionProps) {
+  const mx = useMatrixClient();
+  const useAuthentication = useMediaAuthentication();
+
+  if (mutedSpaceIds.length === 0) return null;
+
+  return (
+    <>
+      <SidebarStackSeparator />
+      <SidebarStack>
+        <SidebarItem style={{ opacity: 0.6 }}>
+          <SidebarItemTooltip tooltip={isOpen ? 'Hide muted spaces' : `Muted spaces (${mutedSpaceIds.length})`}>
+            {(tooltipRef) => (
+              <SidebarAvatar
+                as="button"
+                ref={tooltipRef}
+                size="400"
+                onClick={onToggle}
+              >
+                <Icon size="400" src={Icons.BellMute} />
+              </SidebarAvatar>
+            )}
+          </SidebarItemTooltip>
+        </SidebarItem>
+        {isOpen &&
+          mutedSpaceIds.map((spaceId) => {
+            const space = mx.getRoom(spaceId);
+            if (!space) return null;
+            return (
+              <SidebarItem
+                key={spaceId}
+                active={spaceId === selectedSpaceId}
+                style={{ opacity: 0.6 }}
+              >
+                <SidebarItemTooltip tooltip={`${space.name} (muted)`}>
+                  {(triggerRef) => (
+                    <SidebarAvatar
+                      as="button"
+                      data-id={spaceId}
+                      ref={triggerRef}
+                      size="400"
+                      onClick={onSpaceClick}
+                    >
+                      <RoomAvatar
+                        roomId={spaceId}
+                        src={getRoomAvatarUrl(mx, space, 96, useAuthentication) ?? undefined}
+                        alt={space.name}
+                        renderFallback={() => (
+                          <Text size="H4">{nameInitials(space.name, 2)}</Text>
+                        )}
+                      />
+                    </SidebarAvatar>
+                  )}
+                </SidebarItemTooltip>
+              </SidebarItem>
+            );
+          })}
+      </SidebarStack>
+    </>
+  );
+}
+
 type SpaceTabsProps = {
   scrollRef: RefObject<HTMLDivElement>;
 };
@@ -622,6 +697,8 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
   const [openedFolder, setOpenedFolder] = useAtom(useOpenedSidebarFolderAtom());
   const [draggingItem, setDraggingItem] = useState<SidebarDraggable>();
+  const { spaceMuteData, isSpaceMuted } = useSpaceMute();
+  const [mutedSectionOpen, setMutedSectionOpen] = useState(false);
 
   useDnDMonitor(
     scrollRef,
@@ -801,12 +878,34 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
     [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
   );
 
+  // Separate muted spaces from the main list
+  const mutedSpaceIds = useMemo(() => {
+    const muted: string[] = [];
+    sidebarItems.forEach((item) => {
+      if (typeof item === 'string' && isSpaceMuted(item)) {
+        muted.push(item);
+      }
+      // Note: We don't move spaces inside folders to muted section
+      // They stay in their folder but could be visually indicated
+    });
+    return muted;
+  }, [sidebarItems, isSpaceMuted, spaceMuteData]);
+
+  const unmutedItems = useMemo(() => {
+    return sidebarItems.filter((item) => {
+      if (typeof item === 'string') {
+        return !isSpaceMuted(item);
+      }
+      return true; // Keep folders in main list
+    });
+  }, [sidebarItems, isSpaceMuted, spaceMuteData]);
+
   if (sidebarItems.length === 0) return null;
   return (
     <>
       <SidebarStackSeparator />
       <SidebarStack>
-        {sidebarItems.map((item) => {
+        {unmutedItems.map((item) => {
           if (typeof item === 'object') {
             if (openedFolder.has(item.id)) {
               return (
@@ -865,6 +964,13 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
           );
         })}
       </SidebarStack>
+      <MutedSpacesSection
+        mutedSpaceIds={mutedSpaceIds}
+        isOpen={mutedSectionOpen}
+        onToggle={() => setMutedSectionOpen((o) => !o)}
+        selectedSpaceId={selectedSpaceId}
+        onSpaceClick={handleSpaceClick}
+      />
     </>
   );
 }
