@@ -22,6 +22,7 @@ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../components/leave-space-prompt';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
+import { SpaceMuteMenuItem } from '../../components/space-mute';
 import { stopPropagation } from '../../utils/keyboard';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
@@ -284,6 +285,12 @@ export function HierarchyItemMenu({
                       disabled={!canInvite()}
                     />
                     <SettingsMenuItem item={item} requestClose={handleRequestClose} />
+                    {'space' in item && (
+                      <SpaceMuteMenuItem
+                        spaceId={item.roomId}
+                        requestClose={handleRequestClose}
+                      />
+                    )}
                     <UseStateProvider initial={false}>
                       {(promptLeave, setPromptLeave) => (
                         <>
