@@ -93,7 +93,8 @@ import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
-import { useSpaceMute } from '../../../hooks/useSpaceMute';
+import { useSpaceMute, MUTE_DURATIONS, getMuteTimeRemaining } from '../../../hooks/useSpaceMute';
+import { SpaceMuteMenuItem } from '../../../components/space-mute';
 
 type SpaceMenuProps = {
   room: Room;
@@ -219,6 +220,10 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
               Space Settings
             </Text>
           </MenuItem>
+        </Box>
+        <Line variant="Surface" size="300" />
+        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+          <SpaceMuteMenuItem spaceId={room.roomId} requestClose={requestClose} />
         </Box>
       </Menu>
     );
