@@ -341,9 +341,9 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   name={localSummary.name}
                   topic={localSummary.topic}
                   avatarUrl={
-                    dm
-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
+                    // Always use getDirectRoomAvatarUrl - it tries member avatar first,
+                    // then falls back to room avatar. Handles bridge rooms not in m.direct.
+                    getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
                   }
                   memberCount={localSummary.memberCount}
                   suggested={content.suggested}
