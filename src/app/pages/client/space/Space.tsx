@@ -518,13 +518,16 @@ export function Space() {
                 );
               }
 
+              const isDirect = mDirects.has(roomId);
+              const hasAvatar = !!room.getMxcAvatarUrl();
+
               return (
                 <VirtualTile virtualItem={vItem} key={vItem.index} ref={virtualizer.measureElement}>
                   <RoomNavItem
                     room={room}
                     selected={selectedRoomId === roomId}
-                    showAvatar={mDirects.has(roomId)}
-                    direct={mDirects.has(roomId)}
+                    showAvatar={isDirect || hasAvatar}
+                    direct={isDirect}
                     linkPath={getToLink(roomId)}
                     notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
                   />
