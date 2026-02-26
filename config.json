@@ -1,19 +1,21 @@
 {
-  "defaultHomeserver": 1,
+  "defaultHomeserver": 2,
   "homeserverList": [
     "converser.eu",
+    "envs.net",
     "matrix.org",
+    "monero.social",
     "mozilla.org",
-    "unredacted.org",
     "xmr.se"
   ],
   "allowCustomHomeservers": true,
+
   "featuredCommunities": {
     "openAsDefault": false,
     "spaces": [
       "#cinny-space:matrix.org",
       "#community:matrix.org",
-      "#space:unredacted.org",
+      "#space:envs.net",
       "#science-space:matrix.org",
       "#libregaming-games:tchncs.de",
       "#mathematics-on:matrix.org"
@@ -26,15 +28,11 @@
       "#PrivSec.dev:arcticfoxes.net",
       "#disroot:aria-net.org"
     ],
-    "servers": [ "matrix.org", "mozilla.org", "unredacted.org" ]
+    "servers": ["envs.net", "matrix.org", "monero.social", "mozilla.org"]
   },
+
   "hashRouter": {
     "enabled": true,
     "basename": "/"
-  },
-  "push": {
-    "vapidPublicKey": "BNGV0EdwiW4svERw8M4uyt2mmSleCT_cDS4Z6G3gc-aURAsczdW358oZhWTgVcBG2OYzH35WkRlt0oPwiGseoTA",
-    "pushGatewayUrl": "https://sygnal.andrewmurphy.io/_matrix/push/v1/notify",
-    "appId": "io.andrewmurphy.cinny"
   }
 }

@@ -11,18 +11,15 @@ import {
   config,
   toRem,
 } from 'folds';
-import { Room, NotificationCountType } from 'matrix-js-sdk';
+import { Room, NotificationCountType, Direction } from 'matrix-js-sdk';
 import { useAtomValue } from 'jotai';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { RoomAvatar } from '../../../components/room-avatar';
-import { getMemberDisplayName, getNotificationType, getRoomAvatarUrl } from '../../../utils/room';
-import { nameInitials } from '../../../utils/common';
-import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
-import { useSetting } from '../../../state/hooks/settings';
-import { settingsAtom } from '../../../state/settings';
+import { getMemberDisplayName, getNotificationType, roomHaveUnread, getRoomAvatarUrl, getDirectRoomAvatarUrl } from '../../../utils/room';
+import { mxcUrlToHttp } from '../../../utils/matrix';
 import { NotificationType } from '../../../../types/matrix/room';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { markAsRead } from '../../../utils/notifications';
@@ -31,6 +28,8 @@ import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { mDirectAtom } from '../../../state/mDirectList';
 import { SequenceCard } from '../../../components/sequence-card';
+import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+import { nameInitials } from '../../../utils/common';
 import * as css from './Unread.css';
 
 interface UnreadRoomItem {
@@ -50,21 +49,75 @@ function getLastMessagePreview(room: Room): UnreadRoomItem['lastMessage'] {
   const timeline = room.getLiveTimeline();
   const events = timeline.getEvents();
   
-  // Find last message event
+  // Find last message event (handles both plain and encrypted)
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
-    if (event.getType() === 'm.room.message' && !event.isRedacted()) {
-      const content = event.getContent();
+    if (event.isRedacted()) continue;
+    
+    // Get content - for encrypted messages, use clearContent if available
+    const eventType = event.getType();
+    const clearContent = event.getClearContent();
+    const msgContent = clearContent || event.getContent();
+    
+    // Check if it's a message (either plain m.room.message or decrypted encrypted)
+    const isMessage = eventType === 'm.room.message' || 
+      (eventType === 'm.room.encrypted' && clearContent?.msgtype);
+    
+    if (isMessage && msgContent.body) {
       const sender = event.getSender() || '';
       return {
         sender,
         senderName: getMemberDisplayName(room, sender) || sender.split(':')[0].substring(1),
-        body: content.body || '',
+        body: msgContent.body || '',
         timestamp: event.getTs(),
       };
     }
   }
   return null;
+}
+
+interface MessageItem {
+  id: string;
+  sender: string;
+  senderName: string;
+  body: string;
+  timestamp: number;
+  msgtype?: string;
+  url?: string;  // For images
+}
+
+function getRecentMessages(room: Room, limit: number = 15): MessageItem[] {
+  const timeline = room.getLiveTimeline();
+  const events = timeline.getEvents();
+  const messages: MessageItem[] = [];
+  
+  for (let i = events.length - 1; i >= 0 && messages.length < limit; i--) {
+    const event = events[i];
+    if (event.isRedacted()) continue;
+    
+    // Get content - for encrypted messages, use clearContent if available
+    const eventType = event.getType();
+    const clearContent = event.getClearContent();
+    const msgContent = clearContent || event.getContent();
+    
+    // Check if it's a message
+    const isMessage = eventType === 'm.room.message' || 
+      (eventType === 'm.room.encrypted' && clearContent?.msgtype);
+    
+    if (isMessage && (msgContent.body || msgContent.msgtype === 'm.image')) {
+      const sender = event.getSender() || '';
+      messages.unshift({
+        id: event.getId() || String(i),
+        sender,
+        senderName: getMemberDisplayName(room, sender) || sender.split(':')[0].substring(1),
+        body: msgContent.body || '',
+        timestamp: event.getTs(),
+        msgtype: msgContent.msgtype,
+        url: msgContent.url,
+      });
+    }
+  }
+  return messages;
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -88,8 +141,7 @@ function UnreadRoomCard({
   onKeepUnread,
   onOpen,
   isDM,
-  mx,
-  useAuthentication,
+  avatarUrl,
 }: {
   item: UnreadRoomItem;
   isSelected: boolean;
@@ -97,8 +149,7 @@ function UnreadRoomCard({
   onKeepUnread: () => void;
   onOpen: () => void;
   isDM: boolean;
-  mx: any;
-  useAuthentication: boolean;
+  avatarUrl?: string;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -117,14 +168,18 @@ function UnreadRoomCard({
       gap="200"
     >
       <Box alignItems="Center" gap="300">
-        <RoomAvatar
-          roomId={item.roomId}
-          src={getRoomAvatarUrl(mx, item.room, 96, useAuthentication) ?? undefined}
-          alt={item.room.name || 'Room'}
-          renderFallback={() => (
-            <Text size="H6">{nameInitials(item.room.name || '?', 2)}</Text>
-          )}
-        />
+        <Avatar size="300" radii="400">
+          <RoomAvatar
+            roomId={item.roomId}
+            src={avatarUrl}
+            alt={item.room.name || 'Room'}
+            renderFallback={() => (
+              <Text as="span" size="H6">
+                {nameInitials(item.room.name)}
+              </Text>
+            )}
+          />
+        </Avatar>
         <Box grow="Yes" direction="Column" gap="100">
           <Box alignItems="Center" gap="200">
             <Text size="T300" truncate priority="400">
@@ -168,13 +223,12 @@ function UnreadRoomCard({
 
 export function Unread() {
   const mx = useMatrixClient();
+  const useAuthentication = useMediaAuthentication();
   const screenSize = useScreenSizeContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const allRooms = useAtomValue(allRoomsAtom);
   const mDirects = useAtomValue(mDirectAtom);
   const { navigateRoom } = useRoomNavigate();
-  const useAuthentication = useMediaAuthentication();
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [skippedRoomIds, setSkippedRoomIds] = useState<Set<string>>(new Set());
@@ -199,7 +253,8 @@ export function Unread() {
 
       const total = unread.total;
       const highlight = unread.highlight;
-      if (total === 0 && highlight === 0) return;
+      // Also check roomHaveUnread - rooms can have unreads without notification counts
+      if (total === 0 && highlight === 0 && !roomHaveUnread(mx, room)) return;
 
       items.push({
         roomId,
@@ -219,6 +274,67 @@ export function Unread() {
 
     return items;
   }, [mx, roomToUnread, allRooms, skippedRoomIds]);
+
+  // Get messages for selected room
+  const selectedItem = unreadItems[selectedIndex];
+  // Pagination state
+  const [isPaginating, setIsPaginating] = useState(false);
+  const [paginatedRooms, setPaginatedRooms] = useState<Set<string>>(new Set());
+
+  const selectedMessages = useMemo(() => {
+    if (!selectedItem) return [];
+    return getRecentMessages(selectedItem.room, 20);
+  }, [selectedItem, paginatedRooms]); // Re-run after pagination
+
+  // Load messages for selected room if timeline is empty
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (!selectedItem) {
+        console.log('[Unread] No selected item');
+        return;
+      }
+      const roomId = selectedItem.roomId;
+      const roomName = selectedItem.room.name;
+      
+      // Skip if already paginated this room
+      if (paginatedRooms.has(roomId)) {
+        console.log('[Unread] Already paginated:', roomName);
+        return;
+      }
+      
+      const timeline = selectedItem.room.getLiveTimeline();
+      const events = timeline.getEvents();
+      const paginationToken = timeline.getPaginationToken(Direction.Backward);
+      
+      // Only paginate if we have few or no message events
+      const messageCount = events.filter(e => 
+        e.getType() === 'm.room.message' || e.getType() === 'm.room.encrypted'
+      ).length;
+      
+      console.log('[Unread] Room:', roomName, 'messages:', messageCount, 'total events:', events.length, 'token:', !!paginationToken);
+      
+      if (messageCount < 5 && paginationToken) {
+        console.log('[Unread] Paginating...');
+        setIsPaginating(true);
+        try {
+          await mx.paginateEventTimeline(timeline, {
+            backwards: true,
+            limit: 30,
+          });
+          console.log('[Unread] Pagination complete, new events:', timeline.getEvents().length);
+          setPaginatedRooms(prev => new Set([...prev, roomId]));
+        } catch (err) {
+          console.error('[Unread] Failed to paginate:', err);
+        }
+        setIsPaginating(false);
+      } else {
+        console.log('[Unread] Skipping pagination - enough messages or no token');
+        setPaginatedRooms(prev => new Set([...prev, roomId]));
+      }
+    };
+    
+    loadMessages();
+  }, [mx, selectedItem, paginatedRooms]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -248,9 +364,9 @@ export function Unread() {
           e.preventDefault();
           if (e.shiftKey) {
             // Mark all as read
-            unreadItems.forEach((item) => markAsRead(mx, item.roomId, hideActivity));
+            unreadItems.forEach((item) => markAsRead(mx, item.roomId));
           } else if (unreadItems[selectedIndex]) {
-            markAsRead(mx, unreadItems[selectedIndex].roomId, hideActivity);
+            markAsRead(mx, unreadItems[selectedIndex].roomId);
             // Keep selection in bounds
             if (selectedIndex >= unreadItems.length - 1) {
               setSelectedIndex(Math.max(0, unreadItems.length - 2));
@@ -286,7 +402,7 @@ export function Unread() {
 
   const handleMarkRead = useCallback(
     (roomId: string) => {
-      markAsRead(mx, roomId, hideActivity);
+      markAsRead(mx, roomId);
     },
     [mx]
   );
@@ -303,10 +419,20 @@ export function Unread() {
   );
 
   const handleMarkAllRead = useCallback(() => {
-    unreadItems.forEach((item) => markAsRead(mx, item.roomId, hideActivity));
+    unreadItems.forEach((item) => markAsRead(mx, item.roomId));
   }, [mx, unreadItems]);
 
   const mobile = screenSize === ScreenSize.Mobile;
+
+  // Helper to get avatar URL for a room
+  const getAvatarUrl = useCallback(
+    (room: Room, isDM: boolean) => {
+      return isDM
+        ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
+        : getRoomAvatarUrl(mx, room, 96, useAuthentication);
+    },
+    [mx, useAuthentication]
+  );
 
   return (
     <Page>
@@ -356,20 +482,66 @@ export function Unread() {
                   {unreadItems.length} room{unreadItems.length !== 1 ? 's' : ''} with unread messages
                 </Text>
                 <Box direction="Column" gap="200">
-                  {unreadItems.map((item, index) => (
-                    <UnreadRoomCard
-                      key={item.roomId}
-                      item={item}
-                      isSelected={index === selectedIndex}
-                      onMarkRead={() => handleMarkRead(item.roomId)}
-                      onKeepUnread={() => handleKeepUnread(item.roomId)}
-                      onOpen={() => handleOpen(item.roomId)}
-                      isDM={mDirects.has(item.roomId)}
-                      mx={mx}
-                      useAuthentication={useAuthentication}
-                    />
-                  ))}
+                  {unreadItems.map((item, index) => {
+                    const isDM = mDirects.has(item.roomId);
+                    return (
+                      <UnreadRoomCard
+                        key={item.roomId}
+                        item={item}
+                        isSelected={index === selectedIndex}
+                        onMarkRead={() => handleMarkRead(item.roomId)}
+                        onKeepUnread={() => handleKeepUnread(item.roomId)}
+                        onOpen={() => handleOpen(item.roomId)}
+                        isDM={isDM}
+                        avatarUrl={getAvatarUrl(item.room, isDM)}
+                      />
+                    );
+                  })}
                 </Box>
+                {/* Message Preview for Selected Room */}
+                {selectedItem && selectedMessages.length > 0 && (
+                  <Box direction="Column" gap="200" style={{ marginTop: toRem(16) }}>
+                    <Text size="T300" priority="400">
+                      Messages in {selectedItem.room.name}
+                      {isPaginating && ' (loading...)'}
+                    </Text>
+                    <Box
+                      direction="Column"
+                      gap="100"
+                      style={{
+                        maxHeight: toRem(300),
+                        overflowY: 'auto',
+                        padding: toRem(8),
+                        backgroundColor: 'var(--bg-surface-container)',
+                        borderRadius: toRem(8),
+                      }}
+                    >
+                      {selectedMessages.map((msg) => (
+                        <Box key={msg.id} direction="Column" gap="50">
+                          <Box alignItems="Center" gap="200">
+                            <Text size="T200" priority="400">
+                              {msg.senderName}
+                            </Text>
+                            <Text size="T100" priority="300">
+                              {formatRelativeTime(msg.timestamp)}
+                            </Text>
+                          </Box>
+                          {msg.msgtype === 'm.image' && msg.url ? (
+                            <img 
+                              src={mxcUrlToHttp(msg.url, mx.baseUrl, 200, 200, 'scale', false, useAuthentication) || ''}
+                              alt={msg.body || 'Image'}
+                              style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px' }}
+                            />
+                          ) : (
+                            <Text size="T200" priority="300" style={{ whiteSpace: 'pre-wrap' }}>
+                              {msg.body}
+                            </Text>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
                 <Box justifyContent="Center" gap="200">
                   <Text size="T200" priority="300">
                     ↑/↓ or j/k navigate • Enter open • m mark read • s skip
